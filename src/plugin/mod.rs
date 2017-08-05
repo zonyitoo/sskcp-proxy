@@ -67,8 +67,8 @@ pub fn launch_plugin(config: &mut Config, mode: PluginMode) -> io::Result<Option
         let loop_ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let local_addr = SocketAddr::new(loop_ip, get_local_port()?);
 
-        let ref svr_addr = config.remote_addr;
-        let svr_addr = match start_plugin(c, svr_addr, &local_addr, mode) {
+        let ref orig_svr_addr = config.remote_addr;
+        let svr_addr = match start_plugin(c, orig_svr_addr, &local_addr, mode) {
             Err(err) => {
                 panic!("Failed to start plugin \"{}\", err: {}", c.plugin, err);
             }
@@ -85,17 +85,23 @@ pub fn launch_plugin(config: &mut Config, mode: PluginMode) -> io::Result<Option
         };
 
         match mode {
-            PluginMode::Client => info!("Started plugin \"{}\" on {} <-> {}", c.plugin, local_addr, svr_addr),
-            PluginMode::Server => info!("Started plugin \"{}\" on {} <-> {}", c.plugin, svr_addr, local_addr),
+            PluginMode::Client => {
+                info!("Started plugin \"{}\" on {} <-> {}", c.plugin, local_addr, orig_svr_addr);
+                svr_addr_opt = Some(svr_addr); // Fuck borrow checker
+            }
+            PluginMode::Server => {
+                info!("Started plugin \"{}\" on {} <-> {}", c.plugin, orig_svr_addr, local_addr);
+                svr_addr_opt = Some(orig_svr_addr.clone()); // Fuck borrow checker
+            }
         }
-
-        svr_addr_opt = Some(svr_addr); // Fuck borrow checker
     }
 
     if let Some(svr_addr) = svr_addr_opt {
-        config.remote_addr = svr_addr;
+        match mode {
+            PluginMode::Client => config.remote_addr = svr_addr,
+            PluginMode::Server => config.local_addr = svr_addr,
+        }
     }
-
 
     Ok(plugin)
 }

@@ -3,6 +3,8 @@ extern crate tokio_io;
 extern crate tokio_kcp;
 extern crate sskcp;
 extern crate env_logger;
+extern crate log;
+extern crate time;
 
 use std::env;
 
@@ -11,10 +13,24 @@ use sskcp::local::start_proxy;
 use sskcp::opt::PluginOpts;
 use sskcp::plugin::{PluginConfig, PluginMode, launch_plugin};
 
+use env_logger::LogBuilder;
+use log::{LogLevelFilter, LogRecord};
 use tokio_kcp::{KcpConfig, KcpNoDelayConfig};
 
 fn main() {
-    let _ = env_logger::init();
+    let mut log_builder = LogBuilder::new();
+    log_builder.filter(None, LogLevelFilter::Info);
+    // Default filter
+    log_builder.format(|record: &LogRecord| {
+                           format!("[{}][{}] {}",
+                                   time::now().strftime("%Y-%m-%d][%H:%M:%S").unwrap(),
+                                   record.level(),
+                                   record.args())
+                       });
+    if let Ok(env_conf) = env::var("RUST_LOG") {
+        log_builder.parse(&env_conf);
+    }
+    log_builder.init().unwrap();
 
     let remote_host = env::var("SS_REMOTE_HOST").expect("Require SS_REMOTE_HOST");
     let remote_port = env::var("SS_REMOTE_PORT").expect("Require SS_REMOTE_PORT");
