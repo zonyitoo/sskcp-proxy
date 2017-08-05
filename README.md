@@ -4,6 +4,22 @@ A ShadowSocks' SIP003 plugin for relaying data in [KCP](https://github.com/skywi
 
 *NOTE: Does not support standalone mode*
 
+```plain
++-----------+                +-----------------+                +-----------------+
+|    SS     | -------------- | PLUGIN LOCAL    | -------------- | SSKCP LOCAL     |
+|   LOCAL   |  TCP LoopBack  | TCP IN, TCP OUT |  TCP LoopBack  | TCP IN, KCP OUT |
++-----------+                +-----------------+                +-----------------+
+                                                                         |
+                                                                         |
+                                                                         | INTERNET
+                                                                         |   UDP
+                                                                         |
++-----------+                +-----------------+                +-----------------+
+|    SS     | -------------- | PLUGIN SERVER   | -------------- | SSKCP SERVER    |
+|  SERVER   |  TCP LoopBack  | TCP IN, TCP OUT |  TCP LoopBack  | KCP IN, TCP OUT |
++-----------+                +-----------------+                +-----------------+
+```
+
 ## Usage
 
 Use it like a normal SIP003 plugin.
