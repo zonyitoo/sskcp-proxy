@@ -29,7 +29,7 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
     info!("Listening on {}", svr_addr);
 
     let svr = listener.incoming().for_each(|(client, addr)| {
-        info!("Accepted TCP connection {}, relay to {}", addr, &config.remote_addr);
+        debug!("Accepted TCP connection {}, relay to {}", addr, &config.remote_addr);
         let chandle = handle.clone();
         let kcp_config = config.kcp_config;
         let fut = resolve_server_addr(&config.remote_addr, &handle).and_then(move |svr_addr| {

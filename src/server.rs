@@ -32,7 +32,7 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
     info!("Listening on {}", svr_addr);
 
     let svr = listener.incoming().for_each(|(client, addr)| {
-        info!("Accepted KCP connection {}, relay to {}", addr, config.local_addr);
+        debug!("Accepted KCP connection {}, relay to {}", addr, config.local_addr);
         let chandle = handle.clone();
         let fut = resolve_server_addr(&config.local_addr, &handle).and_then(move |svr_addr| {
             let stream = TcpStream::connect(&svr_addr, &chandle);
