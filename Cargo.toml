@@ -1,0 +1,26 @@
+[package]
+name = "sskcp"
+version = "0.1.0"
+authors = ["Y. T. Chung <zonyitoo@gmail.com>"]
+
+[[bin]]
+name = "sskcp-local"
+path = "src/bin/sskcp-local.rs"
+
+[[bin]]
+name = "sskcp-server"
+path = "src/bin/sskcp-server.rs"
+
+[dependencies]
+tokio-kcp = { path = "../tokio_kcp" }
+tokio-io = "0.1"
+tokio-core = "0.1"
+serde_urlencoded = "0.5"
+serde = "1.0"
+serde_derive = "1.0"
+futures = "0.1"
+subprocess = "0.1"
+log = "0.3"
+netdb = "0.1"
+lru_time_cache = "0.6"
+env_logger = "0.4"
