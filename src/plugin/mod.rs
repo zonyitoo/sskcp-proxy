@@ -70,11 +70,12 @@ pub fn launch_plugin(config: &mut Config, mode: PluginMode) -> io::Result<Option
         let svr_addr = match mode {
             PluginMode::Client => {
                 // Client plugin will listen on local and relay to remote
-                // So we allocate a loopback address for plugin's local to listen, and then set our remote address
-                // to the newly allocated address
-                let ref remote_addr = config.remote_addr;
-                info!("Started plugin \"{}\" on {} <-> {}", c.plugin, local_addr, remote_addr);
-                match start_plugin(c, remote_addr, &local_addr, mode) {
+                // So we allocated a new address for us to listen, and let the plugin listen on the original local
+                // And then, set the plugin's remote to us
+                let svr_addr = ServerAddr::SocketAddr(local_addr);
+                let orig_local_addr = config.local_addr.listen_addr();
+                info!("Started plugin \"{}\" on {} <-> {}", c.plugin, orig_local_addr, local_addr);
+                match start_plugin(c, &svr_addr, orig_local_addr, mode) {
                     Err(err) => {
                         panic!("Failed to start plugin \"{}\", err: {}", c.plugin, err);
                     }
@@ -118,10 +119,7 @@ pub fn launch_plugin(config: &mut Config, mode: PluginMode) -> io::Result<Option
     }
 
     if let Some(svr_addr) = svr_addr_opt {
-        match mode {
-            PluginMode::Client => config.remote_addr = svr_addr,
-            PluginMode::Server => config.local_addr = svr_addr,
-        }
+        config.local_addr = svr_addr;
     }
 
     Ok(plugin)
