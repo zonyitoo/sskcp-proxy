@@ -10,7 +10,7 @@ pub struct PluginOpts {
     pub nodelay: Option<bool>,
     pub interval: Option<i32>,
     pub resend: Option<i32>,
-    pub no_congestion_control: Option<bool>,
+    pub nc: Option<bool>,
 }
 
 impl PluginOpts {
@@ -27,7 +27,6 @@ impl PluginOpts {
     }
 
     pub fn has_kcp_nodelay_config(&self) -> bool {
-        self.nodelay.is_some() || self.interval.is_some() || self.resend.is_some() ||
-            self.no_congestion_control.is_some()
+        self.nodelay.is_some() || self.interval.is_some() || self.resend.is_some() || self.nc.is_some()
     }
 }

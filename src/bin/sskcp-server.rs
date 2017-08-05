@@ -54,7 +54,7 @@ fn main() {
                     if let Some(rs) = opt.resend {
                         c.resend = rs;
                     }
-                    if let Some(nc) = opt.no_congestion_control {
+                    if let Some(nc) = opt.nc {
                         c.nc = nc;
                     }
                     cfg.nodelay = Some(c);
