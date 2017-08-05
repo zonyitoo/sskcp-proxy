@@ -1,6 +1,6 @@
 use std::io;
 
-use futures::{Future, Stream};
+use futures::{self, Future, Stream};
 use futures::future::Either;
 use tokio_core::net::TcpListener;
 use tokio_core::reactor::Core;
@@ -33,10 +33,12 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
         let chandle = handle.clone();
         let kcp_config = config.kcp_config;
         let fut = resolve_server_addr(&config.remote_addr, &handle).and_then(move |svr_addr| {
-            let stream = match kcp_config {
-                Some(c) => KcpStream::connect_with_config(&svr_addr, &chandle, c),
-                None => KcpStream::connect(&svr_addr, &chandle),
-            };
+            let stream = futures::lazy(move || {
+                match kcp_config {
+                    Some(c) => KcpStream::connect_with_config(&svr_addr, &chandle, c),
+                    None => KcpStream::connect(&svr_addr, &chandle),
+                }
+            });
 
             stream.and_then(|remote| {
                 let (cr, cw) = client.split();
