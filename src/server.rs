@@ -36,15 +36,24 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
         let chandle = handle.clone();
         let fut = resolve_server_addr(&config.local_addr, &handle).and_then(move |svr_addr| {
             let stream = TcpStream::connect(&svr_addr, &chandle);
-            stream.and_then(|remote| {
+            stream.and_then(move |remote| {
                 let (cr, cw) = client.split();
                 let (rr, rw) = remote.split();
                 copy(cr, rw).select2(copy(rr, cw))
-                    .then(|r| {
+                    .then(move |r| {
                         match r {
-                            Ok(..) => Ok(()),
-                            Err(Either::A((err, ..))) => Err(err),
-                            Err(Either::B((err, ..))) => Err(err),
+                            Ok(..) => {
+                                debug!("Connection {} is closed", addr);
+                                Ok(())
+                            }
+                            Err(Either::A((err, ..))) => {
+                                error!("Connection {} is closed with error {}", addr, err);
+                                Err(err)
+                            }
+                            Err(Either::B((err, ..))) => {
+                                error!("Connection {} is closed with error {}", addr, err);
+                                Err(err)
+                            }
                         }
                     })
             })
