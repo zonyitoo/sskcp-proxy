@@ -22,11 +22,18 @@ fn main() {
     log_builder.filter(None, LogLevelFilter::Info);
     // Default filter
     log_builder.format(|record: &LogRecord| {
-                           format!("[{}][{}] {}",
-                                   time::now().strftime("%Y-%m-%d][%H:%M:%S").unwrap(),
-                                   record.level(),
-                                   record.args())
-                       });
+        let now = time::now();
+        format!("[{}-{:02}-{:02}][{:02}:{:02}:{:02}.{}][{}] {}",
+                1900 + now.tm_year,
+                now.tm_mon + 1,
+                now.tm_mday,
+                now.tm_hour,
+                now.tm_min,
+                now.tm_sec,
+                now.tm_nsec / 100_000,
+                record.level(),
+                record.args())
+    });
     if let Ok(env_conf) = env::var("RUST_LOG") {
         log_builder.parse(&env_conf);
     }
