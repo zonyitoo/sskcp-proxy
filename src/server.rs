@@ -5,11 +5,11 @@ use futures::future::Either;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
 use tokio_io::AsyncRead;
-use tokio_io::io::copy;
 use tokio_kcp::KcpListener;
 
 use config::Config;
 use dns_resolver::resolve_server_addr;
+use protocol::{copy_decode, copy_encode};
 
 /// Local mode
 ///
@@ -39,23 +39,33 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
             stream.and_then(move |remote| {
                 let (cr, cw) = client.split();
                 let (rr, rw) = remote.split();
-                copy(cr, rw).select2(copy(rr, cw))
+                copy_decode(cr, rw).select2(copy_encode(rr, cw))
                     .then(move |r| {
                         match r {
-                            Ok(..) => {
-                                debug!("Connection {} is closed", addr);
-                                Ok(())
+                            Ok(Either::A((n, o))) => {
+                                debug!("Connection {} is closed, relayed {}bytes", addr, n);
+                                // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
                             }
-                            Err(Either::A((err, ..))) => {
-                                error!("Connection {} is closed with error {}", addr, err);
-                                Err(err)
+                            Ok(Either::B((n, o))) => {
+                                debug!("Connection {} is closed, relayed {}bytes", addr, n);
+                                // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
                             }
-                            Err(Either::B((err, ..))) => {
+                            Err(Either::A((err, o))) => {
                                 error!("Connection {} is closed with error {}", addr, err);
-                                Err(err)
+                                // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                            }
+                            Err(Either::B((err, o))) => {
+                                error!("Connection {} is closed with error {}", addr, err);
+                                // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
                             }
                         }
                     })
+                    .map(|_| ())
+                // copy_decode(cr, rw).join(copy_encode(rr, cw)).map(|_| ())
             })
         });
 
