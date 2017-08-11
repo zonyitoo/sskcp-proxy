@@ -12,8 +12,7 @@ name = "sskcp-server"
 path = "src/bin/sskcp-server.rs"
 
 [dependencies]
-#tokio_kcp = "0.4"
-tokio_kcp = { path = "../tokio_kcp" }
+tokio_kcp = "0.4"
 tokio-io = "0.1"
 tokio-core = "0.1"
 serde_urlencoded = "0.5"

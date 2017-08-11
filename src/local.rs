@@ -34,9 +34,10 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
         let kcp_config = config.kcp_config;
         let fut = resolve_server_addr(&config.remote_addr, &handle).and_then(move |svr_addr| {
             let stream = futures::lazy(move || {
+                let conv = ::current();
                 match kcp_config {
-                    Some(ref c) => KcpStream::connect_with_config(&svr_addr, &chandle, c),
-                    None => KcpStream::connect(&svr_addr, &chandle),
+                    Some(ref c) => KcpStream::connect_with_config(conv, &svr_addr, &chandle, c),
+                    None => KcpStream::connect(conv, &svr_addr, &chandle),
                 }
             });
 
