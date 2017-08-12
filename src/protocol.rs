@@ -141,10 +141,10 @@ where
         Ok(Async::Ready(()))
     }
 
-    pub fn close(mut self) -> Self {
-        self.closing = true;
-        self
-    }
+    // pub fn close(mut self) -> Self {
+    //     self.closing = true;
+    //     self
+    // }
 }
 
 impl<R, W> Future for TunnelCopyDecode<R, W>
@@ -255,14 +255,14 @@ where
         Ok(Async::Ready(()))
     }
 
-    pub fn close(mut self) -> Self {
-        if self.state == EncodeState::Eof {
-            return self;
-        }
+    // pub fn close(mut self) -> Self {
+    //     if self.state == EncodeState::Eof {
+    //         return self;
+    //     }
 
-        self.closing = true;
-        self
-    }
+    //     self.closing = true;
+    //     self
+    // }
 }
 
 impl<R, W> Future for TunnelCopyEncode<R, W>

@@ -18,8 +18,6 @@ extern crate lru_time_cache;
 extern crate bytes;
 extern crate time;
 
-use time::Timespec;
-
 pub mod local;
 pub mod server;
 pub mod opt;
@@ -27,14 +25,3 @@ mod dns_resolver;
 pub mod plugin;
 pub mod config;
 mod protocol;
-
-#[inline]
-fn as_millisec(timespec: &Timespec) -> u32 {
-    (timespec.sec * 1000 + timespec.nsec as i64 / 1000 / 1000) as u32
-}
-
-#[inline]
-fn current() -> u32 {
-    let timespec = time::get_time();
-    as_millisec(&timespec)
-}

@@ -28,29 +28,15 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
 
     info!("Listening on {}", svr_addr);
 
-    let mut last_ts = 0;
-    let mut last_conflict = 0;
-
     let svr = listener.incoming().for_each(|(client, addr)| {
-        let curr = ::current();
-        if curr == last_ts {
-            last_conflict += 1;
-        } else {
-            last_ts = curr;
-            last_conflict = 0;
-        }
-
-        let conv = (curr << 3) | last_conflict;
-
-        debug!("Accepted TCP connection {}, relay to {}, conv {}", addr, &config.remote_addr, conv);
+        debug!("Accepted TCP connection {}, relay to {}", addr, &config.remote_addr);
         let chandle = handle.clone();
         let kcp_config = config.kcp_config;
         let fut = resolve_server_addr(&config.remote_addr, &handle).and_then(move |svr_addr| {
             let stream = futures::lazy(move || {
-                // let conv = ::current();
                 match kcp_config {
-                    Some(ref c) => KcpStream::connect_with_config(conv, &svr_addr, &chandle, c),
-                    None => KcpStream::connect(conv, &svr_addr, &chandle),
+                    Some(ref c) => KcpStream::connect_with_config(0, &svr_addr, &chandle, c),
+                    None => KcpStream::connect(0, &svr_addr, &chandle),
                 }
             });
 
@@ -60,29 +46,33 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
                 copy_encode(cr, rw).select2(copy_decode(rr, cw))
                     .then(move |r| {
                         match r {
-                            Ok(Either::A((n, o))) => {
+                            Ok(Either::A((n, _o))) => {
                                 debug!("Connection {} is closed, relayed {}bytes", addr, n);
                                 // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                Ok(())
                             }
-                            Ok(Either::B((n, o))) => {
+                            Ok(Either::B((n, _o))) => {
                                 debug!("Connection {} is closed, relayed {}bytes", addr, n);
                                 // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                Ok(())
                             }
-                            Err(Either::A((err, o))) => {
+                            Err(Either::A((err, _o))) => {
                                 error!("Connection {} is closed with error {}", addr, err);
-                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
                                 // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                Err(err)
                             }
-                            Err(Either::B((err, o))) => {
+                            Err(Either::B((err, _o))) => {
                                 error!("Connection {} is closed with error {}", addr, err);
                                 // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                Err(err)
                             }
                         }
                     })
-                    .map(|_| ())
+                    // .map(|_| ())
                 // copy_encode(cr, rw).join(copy_decode(rr, cw)).map(|_| ())
             })
         });
