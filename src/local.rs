@@ -28,13 +28,26 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
 
     info!("Listening on {}", svr_addr);
 
+    let mut last_ts = 0;
+    let mut last_conflict = 0;
+
     let svr = listener.incoming().for_each(|(client, addr)| {
-        debug!("Accepted TCP connection {}, relay to {}", addr, &config.remote_addr);
+        let curr = ::current();
+        if curr == last_ts {
+            last_conflict += 1;
+        } else {
+            last_ts = curr;
+            last_conflict = 0;
+        }
+
+        let conv = (curr << 3) | last_conflict;
+
+        debug!("Accepted TCP connection {}, relay to {}, conv {}", addr, &config.remote_addr, conv);
         let chandle = handle.clone();
         let kcp_config = config.kcp_config;
         let fut = resolve_server_addr(&config.remote_addr, &handle).and_then(move |svr_addr| {
             let stream = futures::lazy(move || {
-                let conv = ::current();
+                // let conv = ::current();
                 match kcp_config {
                     Some(ref c) => KcpStream::connect_with_config(conv, &svr_addr, &chandle, c),
                     None => KcpStream::connect(conv, &svr_addr, &chandle),
