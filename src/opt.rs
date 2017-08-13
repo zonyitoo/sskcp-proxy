@@ -11,6 +11,8 @@ pub struct PluginOpts {
     pub interval: Option<i32>,
     pub resend: Option<i32>,
     pub nc: Option<bool>,
+    pub rx_minrto: Option<u32>,
+    pub fast_resend: Option<u32>,
 }
 
 impl PluginOpts {
@@ -23,7 +25,7 @@ impl PluginOpts {
     }
 
     pub fn has_kcp_config(&self) -> bool {
-        self.mtu.is_some() || self.has_kcp_nodelay_config()
+        self.mtu.is_some() || self.has_kcp_nodelay_config() || self.rx_minrto.is_some() || self.fast_resend.is_some()
     }
 
     pub fn has_kcp_nodelay_config(&self) -> bool {

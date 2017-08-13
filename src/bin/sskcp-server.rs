@@ -66,6 +66,8 @@ fn main() {
             if opt.has_kcp_config() {
                 let mut cfg = KcpConfig::default();
                 cfg.mtu = opt.mtu;
+                cfg.rx_minrto = opt.rx_minrto;
+                cfg.fast_resend = opt.fast_resend;
                 if opt.has_kcp_nodelay_config() {
                     let mut c = KcpNoDelayConfig::default();
                     if let Some(nodelay) = opt.nodelay {
