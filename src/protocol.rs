@@ -141,10 +141,10 @@ where
         Ok(Async::Ready(()))
     }
 
-    // pub fn close(mut self) -> Self {
-    //     self.closing = true;
-    //     self
-    // }
+    pub fn close(mut self) -> Self {
+        self.closing = true;
+        self
+    }
 }
 
 impl<R, W> Future for TunnelCopyDecode<R, W>
@@ -159,6 +159,8 @@ where
         loop {
             match self.state {
                 DecodeState::Eof => {
+                    try_nb!(self.w.flush());
+
                     trace!("TunnelCopyDecode is EOF, amt={}", self.amt);
                     return Ok(Async::Ready(self.amt));
                 }
@@ -255,14 +257,14 @@ where
         Ok(Async::Ready(()))
     }
 
-    // pub fn close(mut self) -> Self {
-    //     if self.state == EncodeState::Eof {
-    //         return self;
-    //     }
+    pub fn close(mut self) -> Self {
+        if self.state == EncodeState::Eof {
+            return self;
+        }
 
-    //     self.closing = true;
-    //     self
-    // }
+        self.closing = true;
+        self
+    }
 }
 
 impl<R, W> Future for TunnelCopyEncode<R, W>
@@ -279,6 +281,8 @@ where
                 EncodeState::CopyEncoded => try_ready!(self.copy_encoded(EncodeState::Read)),
                 EncodeState::WriteEof => try_ready!(self.copy_encoded(EncodeState::Eof)),
                 EncodeState::Eof => {
+                    try_nb!(self.w.flush());
+
                     trace!("TunnelCopyEncode is EOF, amt={}", self.amt);
                     return Ok(Async::Ready(self.amt));
                 }
