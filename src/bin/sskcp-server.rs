@@ -17,23 +17,15 @@ use env_logger::LogBuilder;
 use log::{LogLevelFilter, LogRecord};
 use tokio_kcp::{KcpConfig, KcpNoDelayConfig};
 
+fn log_time(record: &LogRecord) -> String {
+    format!("[{}][{}] {}", time::now().strftime("%Y-%m-%d][%H:%M:%S.%f").unwrap(), record.level(), record.args())
+}
+
 fn main() {
     let mut log_builder = LogBuilder::new();
     log_builder.filter(None, LogLevelFilter::Info);
     // Default filter
-    log_builder.format(|record: &LogRecord| {
-        let now = time::now();
-        format!("[{}-{:02}-{:02}][{:02}:{:02}:{:02}.{}][{}] {}",
-                1900 + now.tm_year,
-                now.tm_mon + 1,
-                now.tm_mday,
-                now.tm_hour,
-                now.tm_min,
-                now.tm_sec,
-                now.tm_nsec / 1000_000,
-                record.level(),
-                record.args())
-    });
+    log_builder.format(log_time);
     if let Ok(env_conf) = env::var("RUST_LOG") {
         log_builder.parse(&env_conf);
     }
