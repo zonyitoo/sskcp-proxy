@@ -56,7 +56,7 @@ fn main() {
 
             let mut cfg = KcpConfig::default();
             // Always uses stream mode
-            // cfg.stream = true;
+            cfg.stream = true;
 
             if opt.has_kcp_config() {
                 cfg.mtu = opt.mtu;
