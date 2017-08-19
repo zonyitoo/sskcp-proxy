@@ -54,9 +54,11 @@ fn main() {
                               })
             }
 
-            let mut kcp_config = None;
+            let mut cfg = KcpConfig::default();
+            // Always uses stream mode
+            cfg.stream = true;
+
             if opt.has_kcp_config() {
-                let mut cfg = KcpConfig::default();
                 cfg.mtu = opt.mtu;
                 cfg.rx_minrto = opt.rx_minrto;
                 cfg.fast_resend = opt.fast_resend;
@@ -77,10 +79,9 @@ fn main() {
                     }
                     cfg.nodelay = Some(c);
                 }
-                kcp_config = Some(cfg)
             }
 
-            (plugin, kcp_config)
+            (plugin, Some(cfg))
         }
     };
 
