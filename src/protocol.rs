@@ -219,7 +219,7 @@ where
         if self.closing && self.state != EncodeState::Eof {
             LittleEndian::write_u32(&mut self.buf[0..4], 0);
             self.state = EncodeState::WriteEof;
-            self.cap = 0;
+            self.cap = 4;
             self.pos = 0;
             trace!("TunnelCopyEncode is closing by flag");
             return Ok(Async::Ready(()));
