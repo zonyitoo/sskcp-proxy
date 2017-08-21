@@ -56,14 +56,14 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
                                 match r {
                                     Ok(Either::A((n, o))) => {
                                         debug!("Connection {} is closed, relayed {}bytes", addr, n);
-                                        // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                        Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                        Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                        // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
                                         // Ok(())
                                     }
                                     Ok(Either::B((n, o))) => {
                                         debug!("Connection {} is closed, relayed {}bytes", addr, n);
-                                        // Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                        Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
+                                        Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
+                                        // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
                                         // Ok(())
                                     }
                                     Err(Either::A((err, o))) => {
