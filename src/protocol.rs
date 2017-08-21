@@ -112,7 +112,7 @@ where
 
     fn read(&mut self) -> Poll<(), io::Error> {
         while self.cap < self.data_length {
-            let n = try_nb!(self.r.read(&mut self.buf[self.cap..]));
+            let n = try_nb!(self.r.read(&mut self.buf[self.cap..self.data_length]));
             if n == 0 {
                 return Err(unexpected_eof());
             }
