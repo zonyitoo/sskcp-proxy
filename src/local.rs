@@ -6,7 +6,7 @@ use tokio_core::net::TcpListener;
 use tokio_core::reactor::Core;
 use tokio_io::AsyncRead;
 use tokio_io::io::{write_all, read_exact, flush};
-use tokio_kcp::{KcpStream, KcpClientSessionUpdater};
+use tokio_kcp::{KcpStream, KcpSessionManager};
 
 use config::Config;
 use dns_resolver::resolve_server_addr;
@@ -29,8 +29,8 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
 
     info!("Listening on {}", svr_addr);
 
-    let updater = KcpClientSessionUpdater::new(&handle).unwrap();
-
+    let mut mgr = KcpSessionManager::new(&handle).unwrap();
+    let updater = mgr.clone();
     let svr = listener.incoming().for_each(|(client, addr)| {
         debug!("Accepted TCP connection {}, relay to {}", addr, &config.remote_addr);
         let chandle = handle.clone();
@@ -91,6 +91,9 @@ pub fn start_proxy(config: &Config) -> io::Result<()> {
                                  }));
 
         Ok(())
+    }).then(|r| {
+        mgr.stop();
+        r
     });
 
     core.run(svr)
