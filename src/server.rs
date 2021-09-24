@@ -1,16 +1,10 @@
-use std::io;
+use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 
-use futures::{Future, Stream};
-use futures::future::Either;
-use tokio_core::net::TcpStream;
-use tokio_core::reactor::Core;
-use tokio_io::AsyncRead;
-use tokio_io::io::{read_exact, write_all, flush};
-use tokio_kcp::KcpListener;
+use log::{debug, error, info};
+use tokio::{net::TcpStream, time};
+use tokio_kcp::{KcpListener, KcpServerStream};
 
-use config::Config;
-use dns_resolver::resolve_server_addr;
-use protocol::{copy_decode, copy_encode};
+use crate::config::{Config, ServerAddr};
 
 /// Local mode
 ///
@@ -18,72 +12,48 @@ use protocol::{copy_decode, copy_encode};
 ///        KCP (UDP)                 TCP Loopback
 /// CLIENT ---------> [SSKCP-Server] <----------> [SS-Server]
 /// ```
-pub fn start_proxy(config: &Config) -> io::Result<()> {
-    debug!("Start server proxy with {:?}", config);
+pub async fn start_proxy(config: Config) -> io::Result<()> {
+    debug!("start server proxy with {:?}", config);
 
-    let mut core = Core::new()?;
-    let handle = core.handle();
+    let config = Arc::new(config);
 
-    let svr_addr = config.remote_addr.listen_addr();
-    let listener = match config.kcp_config {
-        Some(c) => KcpListener::bind_with_config(svr_addr, &handle, c)?,
-        None => KcpListener::bind(svr_addr, &handle)?,
+    let mut listener = match config.remote_addr {
+        ServerAddr::SocketAddr(sa) => KcpListener::bind(config.kcp_config.unwrap_or_default(), sa).await?,
+        ServerAddr::DomainName(ref dname, port) => {
+            KcpListener::bind(config.kcp_config.unwrap_or_default(), (dname.as_str(), port)).await?
+        }
     };
 
-    info!("Listening on {}", svr_addr);
+    info!("KCP server listening on {}", listener.local_addr().unwrap());
 
-    let svr = listener.incoming().for_each(|(client, addr)| {
-        debug!("Accepted KCP connection {}, relay to {}", addr, config.local_addr);
-        let chandle = handle.clone();
-        let fut = resolve_server_addr(&config.local_addr, &handle).and_then(move |svr_addr| {
-            read_exact(client, [0u8; 9])
-                .and_then(|(client, buf)| write_all(client, buf))
-                .and_then(|(client, _)| flush(client))
-                .and_then(move |client| {
-                    let stream = TcpStream::connect(&svr_addr, &chandle);
-                    stream.and_then(move |remote| {
-                        let (cr, cw) = client.split();
-                        let (rr, rw) = remote.split();
-                        copy_decode(cr, rw).select2(copy_encode(rr, cw))
-                            .then(move |r| {
-                                match r {
-                                    Ok(Either::A((n, o))) => {
-                                        debug!("Connection {} is closed, relayed {}bytes", addr, n);
-                                        Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Ok(())
-                                    }
-                                    Ok(Either::B((n, o))) => {
-                                        debug!("Connection {} is closed, relayed {}bytes", addr, n);
-                                        Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Ok(())
-                                    }
-                                    Err(Either::A((err, o))) => {
-                                        error!("Connection {} is closed with error {}", addr, err);
-                                        Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Err(err)
-                                    }
-                                    Err(Either::B((err, o))) => {
-                                        error!("Connection {} is closed with error {}", addr, err);
-                                        Box::new(o.close()) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Box::new(o) as Box<Future<Item=u64, Error=io::Error>>
-                                        // Err(err)
-                                    }
-                                }
-                            })
-                            .map(|_| ())
-                        // copy_decode(cr, rw).join(copy_encode(rr, cw)).map(|_| ())
-                })
-            })
+    loop {
+        let (stream, peer_addr) = match listener.accept().await {
+            Ok(s) => s,
+            Err(err) => {
+                error!("accept failed with error: {}", err);
+                time::sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+
+        debug!("accepted {}", peer_addr);
+
+        let config = config.clone();
+        tokio::spawn(async move {
+            if let Err(err) = handle_client(&config, stream, peer_addr).await {
+                error!("failed to handle client {}, error: {}", peer_addr, err);
+            }
         });
+    }
+}
 
-        handle.spawn(fut.map_err(move |err| {
-                                     error!("Relay error, addr: {}, err: {:?}", addr, err);
-                                 }));
-        Ok(())
-    });
+async fn handle_client(config: &Config, mut stream: KcpServerStream, _peer_addr: SocketAddr) -> io::Result<()> {
+    let mut local_stream = match config.local_addr {
+        ServerAddr::SocketAddr(ref a) => TcpStream::connect(a).await?,
+        ServerAddr::DomainName(ref dname, port) => TcpStream::connect((dname.as_str(), port)).await?,
+    };
 
-    core.run(svr)
+    tokio::io::copy_bidirectional(&mut stream, &mut local_stream)
+        .await
+        .map(|_| ())
 }

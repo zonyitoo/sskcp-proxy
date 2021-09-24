@@ -1,9 +1,9 @@
+use std::{
+    fmt::{self, Display},
+    net::{IpAddr, SocketAddr},
+};
+
 use tokio_kcp::KcpConfig;
-
-use plugin::PluginConfig;
-
-use std::fmt::{self, Display};
-use std::net::{IpAddr, SocketAddr};
 
 #[derive(Clone, Debug)]
 pub enum ServerAddr {
@@ -16,13 +16,6 @@ impl ServerAddr {
         match host.parse::<IpAddr>() {
             Ok(ip) => ServerAddr::SocketAddr(SocketAddr::new(ip, port)),
             Err(..) => ServerAddr::DomainName(host, port),
-        }
-    }
-
-    pub fn listen_addr(&self) -> &SocketAddr {
-        match *self {
-            ServerAddr::SocketAddr(ref addr) => addr,
-            ServerAddr::DomainName(..) => panic!("Listen addr can only be SocketAddr"),
         }
     }
 
@@ -54,6 +47,5 @@ impl Display for ServerAddr {
 pub struct Config {
     pub local_addr: ServerAddr,
     pub remote_addr: ServerAddr,
-    pub plugin: Option<PluginConfig>,
     pub kcp_config: Option<KcpConfig>,
 }
