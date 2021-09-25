@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_urlencoded::{self, de::Error as DeError, ser::Error as SerError};
+use tokio_kcp::{KcpConfig, KcpNoDelayConfig};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct PluginOpts {
@@ -20,11 +21,27 @@ impl PluginOpts {
         serde_urlencoded::to_string(self)
     }
 
-    pub fn has_kcp_config(&self) -> bool {
-        self.mtu.is_some() || self.has_kcp_nodelay_config() || self.rx_minrto.is_some()
-    }
+    pub fn build_kcp_config(&self) -> KcpConfig {
+        let mut kcp_config = KcpConfig::default();
+        kcp_config.stream = true;
+        kcp_config.mtu = self.mtu;
+        kcp_config.rx_minrto = self.rx_minrto;
 
-    pub fn has_kcp_nodelay_config(&self) -> bool {
-        self.nodelay.is_some() || self.interval.is_some() || self.resend.is_some() || self.nc.is_some()
+        let mut nodelay = KcpNoDelayConfig::normal();
+        if let Some(nd) = self.nodelay {
+            nodelay.nodelay = nd;
+        }
+        if let Some(itv) = self.interval {
+            nodelay.interval = itv;
+        }
+        if let Some(resend) = self.interval {
+            nodelay.resend = resend;
+        }
+        if let Some(nc) = self.nc {
+            nodelay.nc = nc;
+        }
+        kcp_config.nodelay = nodelay;
+
+        kcp_config
     }
 }
