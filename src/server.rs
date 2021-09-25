@@ -2,7 +2,7 @@ use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 
 use log::{debug, error, info};
 use tokio::{net::TcpStream, time};
-use tokio_kcp::{KcpListener, KcpServerStream};
+use tokio_kcp::{KcpListener, KcpStream};
 
 use crate::config::{Config, ServerAddr};
 
@@ -47,7 +47,7 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
     }
 }
 
-async fn handle_client(config: &Config, mut stream: KcpServerStream, _peer_addr: SocketAddr) -> io::Result<()> {
+async fn handle_client(config: &Config, mut stream: KcpStream, _peer_addr: SocketAddr) -> io::Result<()> {
     let mut local_stream = match config.local_addr {
         ServerAddr::SocketAddr(ref a) => TcpStream::connect(a).await?,
         ServerAddr::DomainName(ref dname, port) => TcpStream::connect((dname.as_str(), port)).await?,

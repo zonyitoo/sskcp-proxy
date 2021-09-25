@@ -1,6 +1,6 @@
 [package]
 name = "sskcp"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Y. T. Chung <zonyitoo@gmail.com>"]
 edition = "2018"
 
