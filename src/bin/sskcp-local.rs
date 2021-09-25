@@ -29,6 +29,9 @@ async fn main() {
             // Always uses stream mode
             cfg.stream = true;
 
+            // Initialize with rapid mode
+            cfg.nodelay = Some(KcpNoDelayConfig::default());
+
             if opt.has_kcp_config() {
                 cfg.mtu = opt.mtu;
                 cfg.rx_minrto = opt.rx_minrto;
