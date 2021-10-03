@@ -42,6 +42,8 @@ impl PluginOpts {
         }
         kcp_config.nodelay = nodelay;
 
+        kcp_config.wnd_size = Some((256, 256));
+
         kcp_config
     }
 }
