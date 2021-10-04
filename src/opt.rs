@@ -9,7 +9,6 @@ pub struct PluginOpts {
     pub interval: Option<i32>,
     pub resend: Option<i32>,
     pub nc: Option<bool>,
-    pub rx_minrto: Option<u32>,
 }
 
 impl PluginOpts {
@@ -24,8 +23,9 @@ impl PluginOpts {
     pub fn build_kcp_config(&self) -> KcpConfig {
         let mut kcp_config = KcpConfig::default();
         kcp_config.stream = true;
-        kcp_config.mtu = self.mtu;
-        kcp_config.rx_minrto = self.rx_minrto;
+        if let Some(mtu) = self.mtu {
+            kcp_config.mtu = mtu;
+        }
 
         let mut nodelay = KcpNoDelayConfig::normal();
         if let Some(nd) = self.nodelay {
@@ -41,8 +41,6 @@ impl PluginOpts {
             nodelay.nc = nc;
         }
         kcp_config.nodelay = nodelay;
-
-        kcp_config.wnd_size = Some((256, 256));
 
         kcp_config
     }
