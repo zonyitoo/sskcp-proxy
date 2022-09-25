@@ -22,7 +22,7 @@ impl PluginOpts {
 
     pub fn build_kcp_config(&self) -> KcpConfig {
         let mut kcp_config = KcpConfig::default();
-        kcp_config.stream = true;
+        kcp_config.stream = false;
         if let Some(mtu) = self.mtu {
             kcp_config.mtu = mtu;
         }
