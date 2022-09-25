@@ -9,6 +9,8 @@ pub struct PluginOpts {
     pub interval: Option<i32>,
     pub resend: Option<i32>,
     pub nc: Option<bool>,
+    pub sndwnd: Option<u16>,
+    pub rcvwnd: Option<u16>,
 }
 
 impl PluginOpts {
@@ -41,6 +43,12 @@ impl PluginOpts {
             nodelay.nc = nc;
         }
         kcp_config.nodelay = nodelay;
+
+        if self.sndwnd.is_some() || self.rcvwnd.is_some() {
+            kcp_config.wnd_size = (self.sndwnd.unwrap_or(4096), self.rcvwnd.unwrap_or(4096));
+        } else {
+            kcp_config.wnd_size = (4096, 4096);
+        }
 
         kcp_config
     }
