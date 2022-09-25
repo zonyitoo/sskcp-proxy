@@ -11,6 +11,7 @@ pub struct PluginOpts {
     pub nc: Option<bool>,
     pub sndwnd: Option<u16>,
     pub rcvwnd: Option<u16>,
+    pub stream: Option<bool>,
 }
 
 impl PluginOpts {
@@ -24,7 +25,7 @@ impl PluginOpts {
 
     pub fn build_kcp_config(&self) -> KcpConfig {
         let mut kcp_config = KcpConfig::default();
-        kcp_config.stream = false;
+        kcp_config.stream = self.stream.unwrap_or(true);
         if let Some(mtu) = self.mtu {
             kcp_config.mtu = mtu;
         }
