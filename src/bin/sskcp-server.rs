@@ -1,5 +1,6 @@
 use std::env;
 
+use env_logger::Builder;
 use sskcp::{
     config::{Config, ServerAddr},
     opt::PluginOpts,
@@ -8,7 +9,8 @@ use sskcp::{
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    let mut builder = Builder::from_default_env();
+    builder.format_timestamp_millis().init();
 
     let remote_host = env::var("SS_REMOTE_HOST").expect("require SS_REMOTE_HOST");
     let remote_port = env::var("SS_REMOTE_PORT").expect("require SS_REMOTE_PORT");
