@@ -1,5 +1,6 @@
 use std::{io, marker::Unpin, net::SocketAddr, sync::Arc, time::Duration};
 
+use futures::StreamExt;
 use log::{debug, error, info};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -7,8 +8,7 @@ use tokio::{
     time,
 };
 use tokio_kcp::KcpListener;
-use tokio_util::compat::{FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-use yamux::{Config as YamuxConfig, Connection as YamuxConnection, Mode as YamuxMode};
+use tokio_yamux::{Config as YamuxConfig, Session as YamuxSession};
 
 use crate::config::{Config, ServerAddr};
 
@@ -47,17 +47,17 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
         debug!("accepted {}", peer_addr);
 
         let config = config.clone();
-        let mut yamux_stream = YamuxConnection::new(stream.compat(), yamux_config.clone(), YamuxMode::Server);
+        let mut yamux_stream = YamuxSession::new_server(stream, yamux_config.clone());
         tokio::spawn(async move {
             loop {
-                let stream = match yamux_stream.next_stream().await {
-                    Ok(Some(stream)) => stream,
-                    Ok(None) => {
-                        debug!("yamux channel {} closed", peer_addr);
+                let stream = match yamux_stream.next().await {
+                    Some(Ok(stream)) => stream,
+                    Some(Err(err)) => {
+                        error!("yamux channel {} error: {}", peer_addr, err);
                         break;
                     }
-                    Err(err) => {
-                        error!("yamux channel {} error: {}", peer_addr, err);
+                    None => {
+                        debug!("yamux channel {} closed", peer_addr);
                         break;
                     }
                 };
@@ -66,7 +66,7 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
 
                 let config = config.clone();
                 tokio::spawn(async move {
-                    if let Err(err) = handle_client(&config, stream.compat(), peer_addr).await {
+                    if let Err(err) = handle_client(&config, stream, peer_addr).await {
                         error!("failed to handle client {}, error: {}", peer_addr, err);
                     }
                 });

@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::LinkedList, io, io::ErrorKind, net::SocketAddr, sync::Arc, time::Duration};
 
+use futures::StreamExt;
 use log::{debug, error, info, trace};
 use once_cell::sync::Lazy;
 use tokio::{
@@ -7,14 +8,7 @@ use tokio::{
     time,
 };
 use tokio_kcp::{KcpConfig, KcpStream};
-use tokio_util::compat::{FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-use yamux::{
-    Config as YamuxConfig,
-    Connection as YamuxConnection,
-    ConnectionError as YamuxConnectionError,
-    Control as YamuxControl,
-    Mode as YamuxMode,
-};
+use tokio_yamux::{Config as YamuxConfig, Control as YamuxControl, Error as YamuxError, Session as YamuxSession};
 
 use crate::config::{Config, ServerAddr};
 
@@ -103,7 +97,7 @@ thread_local! {
 
 async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: SocketAddr) -> io::Result<()> {
     // Take one valid connection
-    let conn = loop {
+    let mut conn = loop {
         let yamux_conn = CONNECTION_POOL.with(|pool| {
             let pool = &mut pool.borrow_mut().conns;
             pool.pop_front()
@@ -120,7 +114,7 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
 
                     break s;
                 }
-                Err(YamuxConnectionError::TooManyStreams) => {
+                Err(YamuxError::StreamsExhausted) => {
                     // Return it back to CONNECTION_POOL, then create a new connection
                     CONNECTION_POOL.with(|pool| {
                         pool.borrow_mut().conns.push_back(yamux_control);
@@ -135,16 +129,19 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
 
         // Make a new connection
         let kcp_conn = connect_server(config).await?;
-        let mut yamux_conn = YamuxConnection::new(kcp_conn.compat(), YamuxConfig::default(), YamuxMode::Client);
-        let yamux_control = yamux_conn.control();
+        let mut yamux_session = YamuxSession::new_client(kcp_conn, YamuxConfig::default());
+        let yamux_control = yamux_session.control();
 
         tokio::spawn(async move {
             loop {
-                match yamux_conn.next_stream().await {
-                    Ok(Some(_)) => continue,
-                    Ok(None) => break,
-                    Err(e) => {
+                match yamux_session.next().await {
+                    Some(Ok(..)) => {}
+                    Some(Err(e)) => {
                         error!("yamux connection aborted with connection error: {}", e);
+                        break;
+                    }
+                    None => {
+                        trace!("yamux client session closed");
                         break;
                     }
                 }
@@ -159,6 +156,5 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
         trace!("kcp connection opened");
     };
 
-    let mut conn = conn.compat();
     tokio::io::copy_bidirectional(&mut conn, &mut stream).await.map(|_| ())
 }
