@@ -1,8 +1,14 @@
-use std::{io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{io, marker::Unpin, net::SocketAddr, sync::Arc, time::Duration};
 
 use log::{debug, error, info};
-use tokio::{net::TcpStream, time};
-use tokio_kcp::{KcpListener, KcpStream};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpStream,
+    time,
+};
+use tokio_kcp::KcpListener;
+use tokio_util::compat::{FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
+use yamux::{Config as YamuxConfig, Connection as YamuxConnection, Mode as YamuxMode};
 
 use crate::config::{Config, ServerAddr};
 
@@ -26,6 +32,8 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
 
     info!("KCP server listening on {}", listener.local_addr().unwrap());
 
+    let yamux_config = YamuxConfig::default();
+
     loop {
         let (stream, peer_addr) = match listener.accept().await {
             Ok(s) => s,
@@ -39,15 +47,38 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
         debug!("accepted {}", peer_addr);
 
         let config = config.clone();
+        let mut yamux_stream = YamuxConnection::new(stream.compat(), yamux_config.clone(), YamuxMode::Server);
         tokio::spawn(async move {
-            if let Err(err) = handle_client(&config, stream, peer_addr).await {
-                error!("failed to handle client {}, error: {}", peer_addr, err);
+            loop {
+                let stream = match yamux_stream.next_stream().await {
+                    Ok(Some(stream)) => stream,
+                    Ok(None) => {
+                        debug!("yamux channel {} closed", peer_addr);
+                        break;
+                    }
+                    Err(err) => {
+                        error!("yamux channel {} error: {}", peer_addr, err);
+                        break;
+                    }
+                };
+
+                debug!("yamux accepted stream from {}", peer_addr);
+
+                let config = config.clone();
+                tokio::spawn(async move {
+                    if let Err(err) = handle_client(&config, stream.compat(), peer_addr).await {
+                        error!("failed to handle client {}, error: {}", peer_addr, err);
+                    }
+                });
             }
         });
     }
 }
 
-async fn handle_client(config: &Config, mut stream: KcpStream, _peer_addr: SocketAddr) -> io::Result<()> {
+async fn handle_client<S>(config: &Config, mut stream: S, _peer_addr: SocketAddr) -> io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let mut local_stream = match config.local_addr {
         ServerAddr::SocketAddr(ref a) => TcpStream::connect(a).await?,
         ServerAddr::DomainName(ref dname, port) => TcpStream::connect((dname.as_str(), port)).await?,

@@ -1,12 +1,20 @@
-use std::{io, io::ErrorKind, net::SocketAddr, sync::Arc, time::Duration};
+use std::{cell::RefCell, collections::LinkedList, io, io::ErrorKind, net::SocketAddr, sync::Arc, time::Duration};
 
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 use once_cell::sync::Lazy;
 use tokio::{
     net::{lookup_host, TcpListener, TcpStream},
     time,
 };
 use tokio_kcp::{KcpConfig, KcpStream};
+use tokio_util::compat::{FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
+use yamux::{
+    Config as YamuxConfig,
+    Connection as YamuxConnection,
+    ConnectionError as YamuxConnectionError,
+    Control as YamuxControl,
+    Mode as YamuxMode,
+};
 
 use crate::config::{Config, ServerAddr};
 
@@ -49,7 +57,7 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
     }
 }
 
-async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: SocketAddr) -> io::Result<()> {
+async fn connect_server(config: &Config) -> io::Result<KcpStream> {
     static DEFAULT_KCP_CONFIG: Lazy<KcpConfig> = Lazy::new(|| KcpConfig::default());
 
     let kcp_config = match config.kcp_config {
@@ -57,8 +65,8 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
         None => &DEFAULT_KCP_CONFIG,
     };
 
-    let mut remote_stream = match config.remote_addr {
-        ServerAddr::SocketAddr(sa) => KcpStream::connect(kcp_config, sa).await?,
+    match config.remote_addr {
+        ServerAddr::SocketAddr(sa) => KcpStream::connect(kcp_config, sa).await.map_err(Into::into),
         ServerAddr::DomainName(ref dname, port) => {
             let mut result = None;
 
@@ -75,14 +83,77 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
             }
 
             match result {
-                None => return Err(io::Error::new(ErrorKind::Other, "lookup_host resolved to empty")),
-                Some(Ok(s)) => s,
-                Some(Err(err)) => return Err(err.into()),
+                None => Err(io::Error::new(ErrorKind::Other, "lookup_host resolved to empty")),
+                Some(Ok(s)) => Ok(s),
+                Some(Err(err)) => Err(err.into()),
             }
         }
+    }
+}
+
+struct ConnectionPool {
+    conns: LinkedList<YamuxControl>,
+}
+
+thread_local! {
+    static CONNECTION_POOL: RefCell<ConnectionPool> = RefCell::new(ConnectionPool {
+        conns: LinkedList::new()
+    });
+}
+
+async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: SocketAddr) -> io::Result<()> {
+    // Take one valid connection
+    let conn = loop {
+        let yamux_conn = CONNECTION_POOL.with(|pool| {
+            let pool = &mut pool.borrow_mut().conns;
+            pool.pop_front()
+        });
+
+        if let Some(mut yamux_control) = yamux_conn {
+            match yamux_control.open_stream().await {
+                Ok(s) => {
+                    trace!("yamux connection opened {:?}", s);
+                    break s;
+                }
+                Err(YamuxConnectionError::TooManyStreams) => {
+                    // Return it back to CONNECTION_POOL, then create a new connection
+                    CONNECTION_POOL.with(|pool| {
+                        pool.borrow_mut().conns.push_back(yamux_control);
+                    });
+                }
+                Err(err) => {
+                    error!("yamux connection open error: {}", err);
+                    drop(yamux_control);
+                }
+            };
+        }
+
+        // Make a new connection
+        let kcp_conn = connect_server(config).await?;
+        let mut yamux_conn = YamuxConnection::new(kcp_conn.compat(), YamuxConfig::default(), YamuxMode::Client);
+        let yamux_control = yamux_conn.control();
+
+        tokio::spawn(async move {
+            loop {
+                match yamux_conn.next_stream().await {
+                    Ok(Some(_)) => continue,
+                    Ok(None) => break,
+                    Err(e) => {
+                        error!("yamux connection aborted with connection error: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        CONNECTION_POOL.with(|pool| {
+            let pool = &mut pool.borrow_mut().conns;
+            pool.push_front(yamux_control);
+        });
+
+        trace!("kcp connection opened");
     };
 
-    tokio::io::copy_bidirectional(&mut remote_stream, &mut stream)
-        .await
-        .map(|_| ())
+    let mut conn = conn.compat();
+    tokio::io::copy_bidirectional(&mut conn, &mut stream).await.map(|_| ())
 }
