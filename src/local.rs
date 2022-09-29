@@ -113,6 +113,11 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
             match yamux_control.open_stream().await {
                 Ok(s) => {
                     trace!("yamux connection opened {:?}", s);
+
+                    CONNECTION_POOL.with(|pool| {
+                        pool.borrow_mut().conns.push_back(yamux_control);
+                    });
+
                     break s;
                 }
                 Err(YamuxConnectionError::TooManyStreams) => {
