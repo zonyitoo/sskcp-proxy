@@ -128,7 +128,13 @@ async fn handle_client(config: &Config, mut stream: TcpStream, _peer_addr: Socke
         }
 
         // Make a new connection
-        let kcp_conn = connect_server(config).await?;
+        let kcp_conn = match connect_server(config).await {
+            Ok(c) => c,
+            Err(err) => {
+                error!("kcp server connect error, error: {}", err);
+                continue;
+            }
+        };
         let mut yamux_session = YamuxSession::new_client(kcp_conn, YamuxConfig::default());
         let yamux_control = yamux_session.control();
 
