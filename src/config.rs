@@ -5,6 +5,8 @@ use std::{
 
 use tokio_kcp::KcpConfig;
 
+use crate::opt::PluginOpts;
+
 #[derive(Clone, Debug)]
 pub enum ServerAddr {
     SocketAddr(SocketAddr),
@@ -47,5 +49,6 @@ impl Display for ServerAddr {
 pub struct Config {
     pub local_addr: ServerAddr,
     pub remote_addr: ServerAddr,
-    pub kcp_config: Option<KcpConfig>,
+    pub kcp_config: KcpConfig,
+    pub plugin_opts: PluginOpts,
 }

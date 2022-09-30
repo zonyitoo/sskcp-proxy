@@ -2,15 +2,17 @@ use std::{cell::RefCell, collections::LinkedList, io, io::ErrorKind, net::Socket
 
 use futures::StreamExt;
 use log::{debug, error, info, trace};
-use once_cell::sync::Lazy;
 use tokio::{
     net::{lookup_host, TcpListener, TcpStream},
     time,
 };
-use tokio_kcp::{KcpConfig, KcpStream};
+use tokio_kcp::KcpStream;
 use tokio_yamux::{Config as YamuxConfig, Control as YamuxControl, Error as YamuxError, Session as YamuxSession};
 
-use crate::config::{Config, ServerAddr};
+use crate::{
+    config::{Config, ServerAddr},
+    opt::create_outbound_kcp,
+};
 
 /// Local mode
 ///
@@ -52,20 +54,17 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
 }
 
 async fn connect_server(config: &Config) -> io::Result<KcpStream> {
-    static DEFAULT_KCP_CONFIG: Lazy<KcpConfig> = Lazy::new(|| KcpConfig::default());
-
-    let kcp_config = match config.kcp_config {
-        Some(ref c) => c,
-        None => &DEFAULT_KCP_CONFIG,
-    };
+    let kcp_config = &config.kcp_config;
 
     match config.remote_addr {
-        ServerAddr::SocketAddr(sa) => KcpStream::connect(kcp_config, sa).await.map_err(Into::into),
+        ServerAddr::SocketAddr(sa) => create_outbound_kcp(kcp_config, sa, &config.plugin_opts)
+            .await
+            .map_err(Into::into),
         ServerAddr::DomainName(ref dname, port) => {
             let mut result = None;
 
             for addr in lookup_host((dname.as_str(), port)).await? {
-                match KcpStream::connect(kcp_config, addr).await {
+                match create_outbound_kcp(kcp_config, addr, &config.plugin_opts).await {
                     Ok(s) => {
                         result = Some(Ok(s));
                         break;

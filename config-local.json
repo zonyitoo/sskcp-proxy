@@ -1,0 +1,17 @@
+{
+    "locals": [
+        {
+            "local_address": "127.0.0.1",
+            "local_port": 1080,
+            // "protocol": "tunnel",
+            // "forward_address": "127.0.0.1",
+            // "forward_port": 5201
+        }
+    ],
+    "server": "127.0.0.1",
+    "server_port": 8388,
+    "method": "none",
+    "password": "abc",
+    "plugin": "sskcp-local",
+    "plugin_opts": "sndwnd=1024&rcvwnd=1024&nodelay=true&interval=10&resend=2&nc=true"
+}

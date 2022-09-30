@@ -4,13 +4,15 @@ use futures::StreamExt;
 use log::{debug, error, info};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
     time,
 };
 use tokio_kcp::KcpListener;
 use tokio_yamux::{Config as YamuxConfig, Session as YamuxSession};
 
-use crate::config::{Config, ServerAddr};
+use crate::{
+    config::{Config, ServerAddr},
+    opt::create_outbound_tcp,
+};
 
 /// Local mode
 ///
@@ -24,10 +26,8 @@ pub async fn start_proxy(config: Config) -> io::Result<()> {
     let config = Arc::new(config);
 
     let mut listener = match config.remote_addr {
-        ServerAddr::SocketAddr(sa) => KcpListener::bind(config.kcp_config.unwrap_or_default(), sa).await?,
-        ServerAddr::DomainName(ref dname, port) => {
-            KcpListener::bind(config.kcp_config.unwrap_or_default(), (dname.as_str(), port)).await?
-        }
+        ServerAddr::SocketAddr(sa) => KcpListener::bind(config.kcp_config, sa).await?,
+        ServerAddr::DomainName(ref dname, port) => KcpListener::bind(config.kcp_config, (dname.as_str(), port)).await?,
     };
 
     info!("KCP server listening on {}", listener.local_addr().unwrap());
@@ -80,8 +80,10 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let mut local_stream = match config.local_addr {
-        ServerAddr::SocketAddr(ref a) => TcpStream::connect(a).await?,
-        ServerAddr::DomainName(ref dname, port) => TcpStream::connect((dname.as_str(), port)).await?,
+        ServerAddr::SocketAddr(ref a) => create_outbound_tcp(a, &config.plugin_opts).await?,
+        ServerAddr::DomainName(ref dname, port) => {
+            create_outbound_tcp((dname.as_str(), port), &config.plugin_opts).await?
+        }
     };
 
     tokio::io::copy_bidirectional(&mut stream, &mut local_stream)

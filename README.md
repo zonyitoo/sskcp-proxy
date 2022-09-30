@@ -39,6 +39,10 @@ Plugin options passed in `SS_PLUGIN_OPTIONS` are encoded in key-value pairs with
 * `interval` - KCP internal state update interval
 * `resend` - KCP resend
 * `nc` - Set `true` to disable congestion control
+* `outbound_fwmark`: Linux (or Android) sockopt `SO_MARK`
+* `outbound_user_cookie`: FreeBSD sockopt `SO_USER_COOKIE`
+* `outbound_bind_interface`: Socket binds to interface, Linux `SO_BINDTODEVICE`, macOS `IP_BOUND_IF`, Windows `IP_UNICAST_IF`
+* `outbound_bind_addr`: Socket binds to IP
 
 Example:
 
